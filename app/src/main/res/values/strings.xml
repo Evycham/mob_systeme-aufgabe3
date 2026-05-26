@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">mob_systeme3</string>
+    <string name="download_title">Datei laden</string>
+    <string name="download_subtitle">URL einfügen und Download starten</string>
+    <string name="url_hint">https://example.com/datei.pdf</string>
+    <string name="download_button">Download starten</string>
+</resources>
