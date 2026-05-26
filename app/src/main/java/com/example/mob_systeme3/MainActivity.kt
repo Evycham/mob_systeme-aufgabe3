@@ -1,5 +1,6 @@
 package com.example.mob_systeme3
 
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
@@ -8,15 +9,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import com.example.mob_systeme3.Services
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var btnDownload: Button
     private lateinit var urlInput: EditText
     private lateinit var downloadProgress: ProgressBar
-
-    private val service = Services()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,7 +29,11 @@ class MainActivity : AppCompatActivity() {
 
         bindView()
 
-        btnDownload.setOnClickListener { service.loadUrl(urlInput.text.toString()) }
+        btnDownload.setOnClickListener {
+            val intent = Intent(this, DownloadService::class.java)
+
+            startService(intent)
+        }
     }
 
     fun bindView(){
