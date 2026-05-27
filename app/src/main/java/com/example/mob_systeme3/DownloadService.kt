@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Build
 import android.os.Environment
 import android.os.IBinder
@@ -21,6 +22,8 @@ class DownloadService : Service() {
 
     private val CHANNEL_ID = "download_channel"
     private var urlText: String? = null
+    private var isDownloading = false
+    private lateinit var prefs: SharedPreferences
 
     private fun createNotificationChannel(){
         val channel = NotificationChannel(
@@ -48,8 +51,11 @@ class DownloadService : Service() {
             .build()
 
         startForeground(1, notification)
+        prefs = getSharedPreferences("download_data", 0)
 
-        setConnection(urlText)
+        Thread{
+            setConnection(urlText)
+        }.start()
 
 
         return START_STICKY
@@ -95,12 +101,15 @@ class DownloadService : Service() {
 
                 var bytesRead: Int
 
+                isDownloading = true
                 while(inputStream.read(ba).also { bytesRead = it } != -1){
                     // ba - Buffer, 0 - ab welchem Index. bytesRead - wie viel gültige Bytes
                     fos.write(ba, 0, bytesRead)
                     downloadedBytes += bytesRead
 
                     progress = (downloadedBytes * 100) / size
+
+                    processingProgress(progress, isDownloading)
                 }
             } else throw Exception("Die Verbindung ist Fehlgeschlagen!")
 
@@ -114,5 +123,16 @@ class DownloadService : Service() {
         val directory = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: throw Exception("Keinen passenden Ordner!")
         val dateName = parseTitle(input) ?: throw Exception("Die Link ist falsch!")
         return File(directory, dateName)
+    }
+
+    private fun processingProgress(progress: Int, isDownloading: Boolean){
+        prefs.edit()
+            .putInt("progress", progress)
+            .putBoolean("aktive", isDownloading)
+            .apply()
+
+        val progressIntent = Intent("DOWNLOAD_PROGRESS")
+        progressIntent.putExtra("progress", progress)
+        sendBroadcast(progressIntent)
     }
 }

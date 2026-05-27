@@ -1,6 +1,9 @@
 package com.example.mob_systeme3
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
@@ -14,7 +17,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var btnDownload: Button
     private lateinit var urlInput: EditText
-    private lateinit var downloadProgress: ProgressBar
+    private lateinit var downloadBar: ProgressBar
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,7 +33,7 @@ class MainActivity : AppCompatActivity() {
         bindView()
 
         btnDownload.setOnClickListener {
-            val urlText = urlInput.text
+            val urlText = urlInput.text.toString().trim()
 
             val intent = Intent(this, DownloadService::class.java)
             intent.putExtra("url", urlText)
@@ -42,6 +45,32 @@ class MainActivity : AppCompatActivity() {
     fun bindView(){
         btnDownload = findViewById<Button>(R.id.downloadButton)
         urlInput = findViewById<EditText>(R.id.urlEditText)
-        downloadProgress = findViewById<ProgressBar>(R.id.downloadProgressBar)
+        downloadBar = findViewById<ProgressBar>(R.id.downloadProgressBar)
+    }
+
+    private val progressReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val progress = intent?.getIntExtra("progress", 0) ?: 0
+
+            downloadBar.progress = progress
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+
+        registerReceiver(
+            progressReceiver,
+            IntentFilter("DOWNLOAD_PROGRESS")
+        )
+
+        val prefs = getSharedPreferences("download_data", MODE_PRIVATE)
+        val savedProgress = prefs.getInt("progress", 0)
+        downloadBar.progress = savedProgress
+    }
+
+    override fun onStop() {
+        super.onStop()
+        unregisterReceiver(progressReceiver)
     }
 }
