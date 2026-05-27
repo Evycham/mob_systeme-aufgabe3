@@ -12,127 +12,172 @@ import android.os.Environment
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
 import java.io.File
-import java.io.FileOutputStream
 import java.net.HttpURLConnection
+import java.net.URI
 import java.net.URL
-import java.net.URLConnection
 
 class DownloadService : Service() {
 
-    private val CHANNEL_ID = "download_channel"
-    private var urlText: String? = null
+    companion object {
+        const val ACTION_DOWNLOAD_PROGRESS = "com.example.mob_systeme3.DOWNLOAD_PROGRESS"
+        const val EXTRA_PROGRESS = "progress"
+        const val EXTRA_IS_DOWNLOADING = "is_downloading"
+        const val EXTRA_URL = "url"
+        const val PREFS_NAME = "download_data"
+        const val PREF_PROGRESS = "progress"
+        const val PREF_IS_ACTIVE = "active"
+    }
+
+    private val channelId = "download_channel"
+    private val notificationId = 1
     private var isDownloading = false
     private lateinit var prefs: SharedPreferences
 
     private fun createNotificationChannel(){
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Download Service",
-            NotificationManager.IMPORTANCE_LOW
-        )
-
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.createNotificationChannel(channel)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                "Download Service",
+                NotificationManager.IMPORTANCE_LOW
+            )
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
     }
 
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (isDownloading) return START_NOT_STICKY
 
-        urlText = intent?.getStringExtra("url")
+        val urlText = intent?.getStringExtra(EXTRA_URL)
+        if (urlText.isNullOrBlank()) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
 
         createNotificationChannel()
 
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+        val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentTitle("Download läuft")
             .setContentText("Datei wird heruntergeladen...")
             .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOnlyAlertOnce(true)
+            .setOngoing(true)
             .build()
 
-        startForeground(1, notification)
-        prefs = getSharedPreferences("download_data", 0)
+        startForeground(notificationId, notification)
+        prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
 
         Thread{
             setConnection(urlText)
         }.start()
 
 
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     override fun onBind(p0: Intent?): IBinder? {
         return null
     }
 
-    private fun parseTitle(input: String): String? {
-        if(input.isBlank()) return null
-
-        val tags = input.split("/")
-
-        if(tags.last().isBlank()){
-            if(tags.size >= 2){
-                tags.dropLast(1)
-                return tags.last()
-            }
-            return null
-        }
-        return tags.last()
+    private fun parseTitle(input: String): String {
+        val segment = URI(input).path?.substringAfterLast('/')?.trim().orEmpty()
+        return if (segment.isBlank()) "download.bin" else segment
     }
 
     private fun setConnection(link: String?) {
-        if (link.isNullOrBlank()) return
+        if (link.isNullOrBlank()) {
+            finishDownload()
+            return
+        }
 
+        var connection: HttpURLConnection? = null
         try {
             val url = URL(link)
-            val connection = url.openConnection() as HttpURLConnection
+            connection = url.openConnection() as HttpURLConnection
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 30_000
+            connection.requestMethod = "GET"
 
             if(connection.responseCode == 200){
-                val inputStream = connection.inputStream
                 val size = connection.contentLength
-
                 val file = fileBuild(link)
-
-                val fos = FileOutputStream(file)
-                val ba = ByteArray(4096)
+                val ba = ByteArray(8 * 1024)
 
                 var downloadedBytes = 0
-                var progress = 0
-
                 var bytesRead: Int
 
                 isDownloading = true
-                while(inputStream.read(ba).also { bytesRead = it } != -1){
-                    // ba - Buffer, 0 - ab welchem Index. bytesRead - wie viel gültige Bytes
-                    fos.write(ba, 0, bytesRead)
-                    downloadedBytes += bytesRead
+                BufferedInputStream(connection.inputStream).use { inputStream ->
+                    BufferedOutputStream(file.outputStream()).use { outputStream ->
+                        while(inputStream.read(ba).also { bytesRead = it } != -1){
+                            outputStream.write(ba, 0, bytesRead)
+                            downloadedBytes += bytesRead
 
-                    progress = (downloadedBytes * 100) / size
-
-                    processingProgress(progress, isDownloading)
+                            if (size > 0) {
+                                val progress = (downloadedBytes * 100) / size
+                                processingProgress(progress, true)
+                                updateNotification(progress)
+                            }
+                        }
+                    }
                 }
+                processingProgress(100, false)
             } else throw Exception("Die Verbindung ist Fehlgeschlagen!")
 
         } catch (e: Exception){
-            Log.d("Error", e.toString())
+            Log.e("DownloadService", "Download fehlgeschlagen", e)
+            processingProgress(0, false)
+        } finally {
+            connection?.disconnect()
+            finishDownload()
         }
     }
 
 
     private fun fileBuild(input: String): File {
         val directory = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: throw Exception("Keinen passenden Ordner!")
-        val dateName = parseTitle(input) ?: throw Exception("Die Link ist falsch!")
+        val dateName = parseTitle(input)
         return File(directory, dateName)
     }
 
     private fun processingProgress(progress: Int, isDownloading: Boolean){
         prefs.edit()
-            .putInt("progress", progress)
-            .putBoolean("aktive", isDownloading)
+            .putInt(PREF_PROGRESS, progress)
+            .putBoolean(PREF_IS_ACTIVE, isDownloading)
             .apply()
 
-        val progressIntent = Intent("DOWNLOAD_PROGRESS")
-        progressIntent.putExtra("progress", progress)
+        val progressIntent = Intent(ACTION_DOWNLOAD_PROGRESS)
+        progressIntent.putExtra(EXTRA_PROGRESS, progress)
+        progressIntent.putExtra(EXTRA_IS_DOWNLOADING, isDownloading)
         sendBroadcast(progressIntent)
+    }
+
+    private fun updateNotification(progress: Int) {
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setContentTitle("Download läuft")
+            .setContentText("$progress%")
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOnlyAlertOnce(true)
+            .setOngoing(true)
+            .setProgress(100, progress, false)
+            .build()
+
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(notificationId, notification)
+    }
+
+    private fun finishDownload() {
+        isDownloading = false
+        if (::prefs.isInitialized) {
+            prefs.edit().putBoolean(PREF_IS_ACTIVE, false).apply()
+        }
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
     }
 }
