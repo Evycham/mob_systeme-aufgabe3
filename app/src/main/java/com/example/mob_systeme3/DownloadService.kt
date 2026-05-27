@@ -10,6 +10,8 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import java.net.URL
+import java.net.URLConnection
 
 class DownloadService : Service() {
 
@@ -49,4 +51,48 @@ class DownloadService : Service() {
     override fun onBind(p0: Intent?): IBinder? {
         return null
     }
+
+    private fun parseTitle(input: String): String? {
+        if(input.isBlank()) return null
+
+        val tags = input.split("/")
+
+        if(tags.last().isBlank()){
+            if(tags.size >= 2){
+                tags.dropLast(1)
+                return tags.last()
+            }
+            return null
+        }
+        return tags.last()
+    }
+
+    private fun setConnection(link: String) {
+        if (link.isBlank()) return
+
+        try {
+            val url = URL(link)
+            val connection = url.openConnection()
+            val inputStream = connection.getInputStream()
+
+            val size = connection.contentLength
+            var readyBytes = 0
+            var progress = 0
+
+            do {
+                val downloaded = inputStream.read()
+
+                readyBytes += downloaded
+
+                progress = readyBytes / size * 100
+
+            } while (readyBytes != size)
+
+            connection.contentType
+        } catch (e: Exception){
+            Log.d("Error", e.toString())
+        }
+
+    }
+
 }
