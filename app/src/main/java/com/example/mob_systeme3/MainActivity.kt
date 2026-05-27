@@ -17,6 +17,17 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 
+/**
+ * Hauptbildschirm der App.
+ *
+ * Funktion:
+ * - URL eingeben
+ * - Download über Foreground Service starten
+ * - Download-Fortschritt live anzeigen
+ *
+ * Der Service lädt die Datei im Hintergrund und sendet den Fortschritt
+ * per Broadcast zurück an diese Activity.
+ */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var btnDownload: Button
@@ -24,6 +35,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var downloadBar: ProgressBar
     private lateinit var progressText: TextView
 
+    /**
+     * Initialisiert die Activity, bindet die Views und setzt den Klick-Listener.
+     *
+     * @param savedInstanceState Gespeicherter Zustand der Activity (kann null sein).
+     * @return Unit
+     */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -52,6 +69,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Verknüpft die Views aus dem Layout mit den Variablen.
+     *
+     * @return Unit
+     */
     fun bindView(){
         btnDownload = findViewById<Button>(R.id.downloadButton)
         urlInput = findViewById<EditText>(R.id.urlEditText)
@@ -60,6 +82,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val progressReceiver = object : BroadcastReceiver() {
+        /**
+         * Empfängt Fortschritt vom Service und aktualisiert die Oberfläche.
+         *
+         * @param context Kontext des Broadcasts.
+         * @param intent Intent mit Fortschritt und Status.
+         * @return Unit
+         */
         override fun onReceive(context: Context?, intent: Intent?) {
             val progress = intent?.getIntExtra(DownloadService.EXTRA_PROGRESS, 0) ?: 0
             val isDownloading = intent?.getBooleanExtra(DownloadService.EXTRA_IS_DOWNLOADING, false) ?: false
@@ -77,6 +106,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Registriert den BroadcastReceiver und lädt den zuletzt gespeicherten Fortschritt.
+     *
+     * @return Unit
+     */
     override fun onStart() {
         super.onStart()
 
@@ -96,6 +130,11 @@ class MainActivity : AppCompatActivity() {
         btnDownload.isEnabled = !isActive
     }
 
+    /**
+     * Entfernt den BroadcastReceiver beim Verlassen der Activity.
+     *
+     * @return Unit
+     */
     override fun onStop() {
         super.onStop()
         unregisterReceiver(progressReceiver)
