@@ -30,9 +30,12 @@ class MainActivity : AppCompatActivity() {
         bindView()
 
         btnDownload.setOnClickListener {
-            val intent = Intent(this, DownloadService::class.java)
+            val urlText = urlInput.text
 
-            startService(intent)
+            val intent = Intent(this, DownloadService::class.java)
+            intent.putExtra("url", urlText)
+
+            startForegroundService(intent)
         }
     }
 
