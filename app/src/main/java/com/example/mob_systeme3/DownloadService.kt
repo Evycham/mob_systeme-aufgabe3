@@ -49,7 +49,7 @@ class DownloadService : Service() {
 
         startForeground(1, notification)
 
-
+        setConnection(urlText)
 
 
         return START_STICKY
@@ -74,8 +74,8 @@ class DownloadService : Service() {
         return tags.last()
     }
 
-    private fun setConnection(link: String) {
-        if (link.isBlank()) return
+    private fun setConnection(link: String?) {
+        if (link.isNullOrBlank()) return
 
         try {
             val url = URL(link)
@@ -90,38 +90,29 @@ class DownloadService : Service() {
                 val fos = FileOutputStream(file)
                 val ba = ByteArray(4096)
 
+                var downloadedBytes = 0
+                var progress = 0
 
+                var bytesRead: Int
 
+                while(inputStream.read(ba).also { bytesRead = it } != -1){
+                    // ba - Buffer, 0 - ab welchem Index. bytesRead - wie viel gültige Bytes
+                    fos.write(ba, 0, bytesRead)
+                    downloadedBytes += bytesRead
 
-            } else throw Exception("Die Verbiendung ist Fehlgeschlagen!")
+                    progress = (downloadedBytes * 100) / size
+                }
+            } else throw Exception("Die Verbindung ist Fehlgeschlagen!")
 
-
-
-//
-//            while(inputStream.read() != -1){
-//
-//            }
-//
-//            do {
-//                val downloaded = inputStream.read()
-//
-//                readyBytes += downloaded
-//
-//                progress = readyBytes / size * 100
-//
-//            } while (readyBytes != size)
-//
-//            connection.contentType
         } catch (e: Exception){
             Log.d("Error", e.toString())
         }
-
     }
+
 
     private fun fileBuild(input: String): File {
         val directory = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: throw Exception("Keinen passenden Ordner!")
         val dateName = parseTitle(input) ?: throw Exception("Die Link ist falsch!")
         return File(directory, dateName)
     }
-
 }
