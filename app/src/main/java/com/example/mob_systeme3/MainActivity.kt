@@ -10,6 +10,7 @@ import android.util.Patterns
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ProgressBar
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
@@ -21,6 +22,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnDownload: Button
     private lateinit var urlInput: EditText
     private lateinit var downloadBar: ProgressBar
+    private lateinit var progressText: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,6 +48,7 @@ class MainActivity : AppCompatActivity() {
             intent.putExtra(DownloadService.EXTRA_URL, urlText)
 
             startForegroundService(intent)
+            btnDownload.isEnabled = false
         }
     }
 
@@ -53,13 +56,24 @@ class MainActivity : AppCompatActivity() {
         btnDownload = findViewById<Button>(R.id.downloadButton)
         urlInput = findViewById<EditText>(R.id.urlEditText)
         downloadBar = findViewById<ProgressBar>(R.id.downloadProgressBar)
+        progressText = findViewById<TextView>(R.id.progressText)
     }
 
     private val progressReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val progress = intent?.getIntExtra(DownloadService.EXTRA_PROGRESS, 0) ?: 0
+            val isDownloading = intent?.getBooleanExtra(DownloadService.EXTRA_IS_DOWNLOADING, false) ?: false
+            val state = intent?.getStringExtra(DownloadService.EXTRA_STATE)
 
             downloadBar.progress = progress
+            progressText.text = "Fortschritt: $progress%"
+            btnDownload.isEnabled = !isDownloading
+
+            if (state == DownloadService.STATE_DONE) {
+                Toast.makeText(this@MainActivity, "Download abgeschlossen", Toast.LENGTH_SHORT).show()
+            } else if (state == DownloadService.STATE_ERROR) {
+                Toast.makeText(this@MainActivity, "Download fehlgeschlagen", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -76,7 +90,10 @@ class MainActivity : AppCompatActivity() {
 
         val prefs = getSharedPreferences(DownloadService.PREFS_NAME, MODE_PRIVATE)
         val savedProgress = prefs.getInt(DownloadService.PREF_PROGRESS, 0)
+        val isActive = prefs.getBoolean(DownloadService.PREF_IS_ACTIVE, false)
         downloadBar.progress = savedProgress
+        progressText.text = "Fortschritt: $savedProgress%"
+        btnDownload.isEnabled = !isActive
     }
 
     override fun onStop() {

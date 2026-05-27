@@ -84,8 +84,18 @@
                 android:layout_width="match_parent"
                 android:layout_height="12dp"
                 android:layout_marginTop="16dp"
-                android:indeterminate="true"
+                android:indeterminate="false"
+                android:max="100"
                 android:progressTint="#3E6BFF" />
+
+            <TextView
+                android:id="@+id/progressText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/progress_default"
+                android:textColor="#6A6A6A"
+                android:textSize="13sp" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 

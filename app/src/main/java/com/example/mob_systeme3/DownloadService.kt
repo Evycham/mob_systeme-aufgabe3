@@ -11,7 +11,9 @@ import android.os.Build
 import android.os.Environment
 import android.os.IBinder
 import android.util.Log
+import android.webkit.MimeTypeMap
 import androidx.core.app.NotificationCompat
+import androidx.core.content.FileProvider
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.File
@@ -25,10 +27,14 @@ class DownloadService : Service() {
         const val ACTION_DOWNLOAD_PROGRESS = "com.example.mob_systeme3.DOWNLOAD_PROGRESS"
         const val EXTRA_PROGRESS = "progress"
         const val EXTRA_IS_DOWNLOADING = "is_downloading"
+        const val EXTRA_STATE = "state"
         const val EXTRA_URL = "url"
         const val PREFS_NAME = "download_data"
         const val PREF_PROGRESS = "progress"
         const val PREF_IS_ACTIVE = "active"
+        const val STATE_PROGRESS = "progress"
+        const val STATE_DONE = "done"
+        const val STATE_ERROR = "error"
     }
 
     private val channelId = "download_channel"
@@ -71,6 +77,8 @@ class DownloadService : Service() {
 
         startForeground(notificationId, notification)
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+
+        processingProgress(0, true, STATE_PROGRESS)
 
         Thread{
             setConnection(urlText)
@@ -120,18 +128,20 @@ class DownloadService : Service() {
 
                             if (size > 0) {
                                 val progress = (downloadedBytes * 100) / size
-                                processingProgress(progress, true)
+                                processingProgress(progress, true, STATE_PROGRESS)
                                 updateNotification(progress)
                             }
                         }
                     }
                 }
-                processingProgress(100, false)
+                processingProgress(100, false, STATE_DONE)
+                showFinishedNotification(file)
+                openDownloadedFile(file)
             } else throw Exception("Die Verbindung ist Fehlgeschlagen!")
 
         } catch (e: Exception){
             Log.e("DownloadService", "Download fehlgeschlagen", e)
-            processingProgress(0, false)
+            processingProgress(0, false, STATE_ERROR)
         } finally {
             connection?.disconnect()
             finishDownload()
@@ -145,7 +155,7 @@ class DownloadService : Service() {
         return File(directory, dateName)
     }
 
-    private fun processingProgress(progress: Int, isDownloading: Boolean){
+    private fun processingProgress(progress: Int, isDownloading: Boolean, state: String){
         prefs.edit()
             .putInt(PREF_PROGRESS, progress)
             .putBoolean(PREF_IS_ACTIVE, isDownloading)
@@ -154,6 +164,7 @@ class DownloadService : Service() {
         val progressIntent = Intent(ACTION_DOWNLOAD_PROGRESS)
         progressIntent.putExtra(EXTRA_PROGRESS, progress)
         progressIntent.putExtra(EXTRA_IS_DOWNLOADING, isDownloading)
+        progressIntent.putExtra(EXTRA_STATE, state)
         sendBroadcast(progressIntent)
     }
 
@@ -170,6 +181,37 @@ class DownloadService : Service() {
 
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(notificationId, notification)
+    }
+
+    private fun showFinishedNotification(file: File) {
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentTitle("Download fertig")
+            .setContentText(file.name)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setAutoCancel(true)
+            .build()
+
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(notificationId + 1, notification)
+    }
+
+    private fun openDownloadedFile(file: File) {
+        try {
+            val uri = FileProvider.getUriForFile(this, "${packageName}.provider", file)
+            val extension = file.extension.lowercase()
+            val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+                ?: "application/octet-stream"
+
+            val openIntent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mime)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(openIntent)
+        } catch (e: Exception) {
+            Log.e("DownloadService", "Datei konnte nicht geöffnet werden", e)
+        }
     }
 
     private fun finishDownload() {

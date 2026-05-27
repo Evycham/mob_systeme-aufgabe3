@@ -4,4 +4,5 @@
     <string name="download_subtitle">URL einfügen und Download starten</string>
     <string name="url_hint">https://example.com/datei.pdf</string>
     <string name="download_button">Download starten</string>
+    <string name="progress_default">Fortschritt: 0%</string>
 </resources>
